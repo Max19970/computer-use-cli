@@ -5,7 +5,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from computer_use_cli import automation, capture, observe, policy as safety_policy, uia, vision, windows
+from computer_use_cli import automation, capture, observe, uia, vision, windows
+from computer_use_cli import policy as safety_policy
 
 
 def _require_mapping(value: Any) -> dict[str, Any]:
@@ -70,6 +71,38 @@ def _keys(value: Any) -> tuple[str, ...]:
     raise ValueError("keys must be a list or a string like 'ctrl+l'")
 
 
+def _optional_float(action: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        if key in action and action[key] is not None:
+            return float(action[key])
+    return None
+
+
+def _optional_int(action: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        if key in action and action[key] is not None:
+            return int(action[key])
+    return None
+
+
+def _required_int(action: dict[str, Any], *keys: str) -> int:
+    value = _optional_int(action, *keys)
+    if value is None:
+        raise ValueError(f"action requires one of: {', '.join(keys)}")
+    return value
+
+
+def _button(value: Any, default: automation.Button = "left") -> automation.Button:
+    button = str(value or default)
+    if button not in {"left", "middle", "right"}:
+        raise ValueError("button must be one of: left, middle, right")
+    return button  # type: ignore[return-value]
+
+
+def _scroll_clicks(action: dict[str, Any]) -> int:
+    return _required_int(action, "clicks", "amount", "delta", "dy")
+
+
 def supported_actions() -> list[str]:
     return [
         "click",
@@ -79,6 +112,7 @@ def supported_actions() -> list[str]:
         "hotkey",
         "matchImage",
         "move",
+        "moveBetween",
         "observe",
         "ocr",
         "position",
@@ -110,20 +144,38 @@ def run_action(
         raise ValueError("action requires a string 'type' field")
     kind = kind.strip()
 
-    if dry_run and kind not in {"observe", "position", "screenshot", "uiaClick", "uiaFind", "uiaTree"}:
+    dry_runnable_actions = {"observe", "position", "screenshot", "uiaClick", "uiaFind", "uiaTree"}
+    if dry_run and kind not in dry_runnable_actions:
         return {"dryRun": True, "wouldRun": action}
 
     if kind == "position":
         return automation.mouse_position()
 
     if kind == "move":
-        return automation.move(int(action["x"]), int(action["y"]), float(action.get("duration", 0.0)))
+        return automation.move(
+            int(action["x"]),
+            int(action["y"]),
+            _optional_float(action, "duration"),
+            _optional_float(action, "speed", "pixelsPerSecond"),
+        )
+
+    if kind == "moveBetween":
+        return automation.move_between(
+            _required_int(action, "fromX", "startX"),
+            _required_int(action, "fromY", "startY"),
+            _required_int(action, "toX", "endX", "x"),
+            _required_int(action, "toY", "endY", "y"),
+            _optional_float(action, "duration"),
+            _optional_float(action, "speed", "pixelsPerSecond"),
+            bool(action.get("hold", False)),
+            _button(action.get("button")),
+        )
 
     if kind == "click":
         return automation.click(
             int(action["x"]) if "x" in action else None,
             int(action["y"]) if "y" in action else None,
-            str(action.get("button", "left")),  # type: ignore[arg-type]
+            _button(action.get("button")),
             int(action.get("clicks", 1)),
             float(action.get("interval", 0.0)),
         )
@@ -132,7 +184,7 @@ def run_action(
         return automation.click(
             int(action["x"]) if "x" in action else None,
             int(action["y"]) if "y" in action else None,
-            str(action.get("button", "left")),  # type: ignore[arg-type]
+            _button(action.get("button")),
             2,
             0.0,
         )
@@ -150,15 +202,20 @@ def run_action(
         return automation.drag(
             int(action["x"]),
             int(action["y"]),
-            float(action.get("duration", 0.2)),
-            str(action.get("button", "left")),  # type: ignore[arg-type]
+            _optional_float(action, "duration"),
+            _button(action.get("button")),
+            _optional_int(action, "fromX", "startX"),
+            _optional_int(action, "fromY", "startY"),
+            _optional_float(action, "speed", "pixelsPerSecond"),
         )
 
     if kind == "scroll":
         return automation.scroll(
-            int(action["clicks"]),
+            _scroll_clicks(action),
             int(action["x"]) if "x" in action else None,
             int(action["y"]) if "y" in action else None,
+            _optional_int(action, "steps"),
+            float(action.get("interval", 0.0)),
         )
 
     if kind == "type":
@@ -268,4 +325,6 @@ def run_action(
             bool(action.get("includeMinimized", False)),
         )
 
-    raise ValueError(f"unsupported action type: {kind}. Supported: {', '.join(supported_actions())}")
+    raise ValueError(
+        f"unsupported action type: {kind}. Supported: {', '.join(supported_actions())}"
+    )

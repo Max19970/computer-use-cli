@@ -201,10 +201,28 @@ def position() -> None:
 def move(
     x: Annotated[int, typer.Argument(help="Target X coordinate.")],
     y: Annotated[int, typer.Argument(help="Target Y coordinate.")],
-    duration: Annotated[float, typer.Option("--duration", "-d", help="Move duration in seconds.")] = 0.0,
+    duration: Annotated[float | None, typer.Option("--duration", "-d", help="Move duration in seconds. Overrides --speed.")] = None,
+    speed: Annotated[float | None, typer.Option("--speed", help="Cursor speed in pixels per second when --duration is omitted.")] = None,
 ) -> None:
     """Move mouse to screen coordinates."""
-    _guarded("move", automation.move, x, y, duration)
+    _guarded("move", automation.move, x, y, duration, speed)
+
+
+@app.command("move-between")
+def move_between(
+    from_x: Annotated[int, typer.Argument(help="Start X coordinate.")],
+    from_y: Annotated[int, typer.Argument(help="Start Y coordinate.")],
+    to_x: Annotated[int, typer.Argument(help="Target X coordinate.")],
+    to_y: Annotated[int, typer.Argument(help="Target Y coordinate.")],
+    duration: Annotated[float | None, typer.Option("--duration", "-d", help="Move duration in seconds. Overrides --speed.")] = None,
+    speed: Annotated[float | None, typer.Option("--speed", help="Cursor speed in pixels per second when --duration is omitted.")] = None,
+    hold: Annotated[bool, typer.Option("--hold/--no-hold", help="Hold a mouse button while moving.")] = False,
+    button: Annotated[str, typer.Option("--button", "-b", help="left, middle, or right.")] = "left",
+) -> None:
+    """Move cursor from one coordinate to another, optionally holding a mouse button."""
+    if button not in {"left", "middle", "right"}:
+        fail("move-between", "button must be one of: left, middle, right")
+    _guarded("move-between", automation.move_between, from_x, from_y, to_x, to_y, duration, speed, hold, button)
 
 
 @app.command()
@@ -246,13 +264,16 @@ def right_click(
 def drag(
     x: Annotated[int, typer.Argument(help="Target X coordinate.")],
     y: Annotated[int, typer.Argument(help="Target Y coordinate.")],
-    duration: Annotated[float, typer.Option("--duration", "-d", help="Drag duration in seconds.")] = 0.2,
+    duration: Annotated[float | None, typer.Option("--duration", "-d", help="Drag duration in seconds. Overrides --speed.")] = None,
     button: Annotated[str, typer.Option("--button", "-b", help="left, middle, or right.")] = "left",
+    from_x: Annotated[int | None, typer.Option("--from-x", help="Optional drag start X coordinate.")] = None,
+    from_y: Annotated[int | None, typer.Option("--from-y", help="Optional drag start Y coordinate.")] = None,
+    speed: Annotated[float | None, typer.Option("--speed", help="Cursor speed in pixels per second when --duration is omitted.")] = None,
 ) -> None:
-    """Drag mouse from current position to target coordinates."""
+    """Drag mouse from current or supplied start position to target coordinates."""
     if button not in {"left", "middle", "right"}:
         fail("drag", "button must be one of: left, middle, right")
-    _guarded("drag", automation.drag, x, y, duration, button)
+    _guarded("drag", automation.drag, x, y, duration, button, from_x, from_y, speed)
 
 
 @app.command()
@@ -260,9 +281,11 @@ def scroll(
     clicks: Annotated[int, typer.Argument(help="Scroll amount. Positive is up, negative is down.")],
     x: Annotated[int | None, typer.Option(help="Optional X coordinate.")] = None,
     y: Annotated[int | None, typer.Option(help="Optional Y coordinate.")] = None,
+    steps: Annotated[int | None, typer.Option("--steps", help="Split the scroll into smaller wheel events.")] = None,
+    interval: Annotated[float, typer.Option("--interval", "-i", help="Delay between split scroll events.")] = 0.0,
 ) -> None:
     """Scroll at current or supplied mouse position."""
-    _guarded("scroll", automation.scroll, clicks, x, y)
+    _guarded("scroll", automation.scroll, clicks, x, y, steps, interval)
 
 
 @app.command("type")

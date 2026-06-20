@@ -7,7 +7,7 @@ Small local Windows-oriented CLI for computer use:
 - screen screenshots with PyAutoGUI, MSS, or FFmpeg;
 - monitor discovery;
 - window list, focus, active window, and window screenshots;
-- mouse position, move, click, double-click, right-click, drag, scroll;
+- mouse position, move, click, double-click, right-click, drag, smooth move-between/hold, scroll;
 - keyboard text, key press, hotkey;
 - UI Automation tree/search/click through pywinauto;
 - template image matching and wait-image loops through OpenCV;
@@ -80,7 +80,7 @@ Safe dry-run UIA action:
 Supported action types:
 
 ```text
-position, move, click, doubleClick, rightClick, drag, scroll, type, press, hotkey,
+position, move, moveBetween, click, doubleClick, rightClick, drag, scroll, type, press, hotkey,
 sleep, screenshot, screenshotWindow, focusWindow, matchImage, waitImage, ocr,
 uiaTree, uiaFind, uiaClick, observe
 ```
@@ -162,11 +162,13 @@ cu screenshot-window "Chrome" --output chrome.png
 ```powershell
 cu position
 cu move 500 500
+cu move 500 500 --speed 900
+cu move-between 100 100 800 500 --speed 700 --hold
 cu click 500 500
 cu double-click 500 500
 cu right-click 500 500
-cu drag 800 800 --duration 0.4
-cu scroll -5
+cu drag 800 800 --from-x 500 --from-y 500 --speed 700
+cu scroll -5 --steps 5 --interval 0.05
 cu type "hello world"
 cu press enter
 cu hotkey ctrl l
@@ -214,6 +216,23 @@ $env:COMPUTER_USE_LOG = "dev-only/generated/tmp/actions.jsonl"
 cu position
 ```
 
+For MCP/`cu act`, smooth cursor movement can be sent as one confirmed action:
+
+```json
+{
+  "type": "moveBetween",
+  "fromX": 100,
+  "fromY": 100,
+  "toX": 800,
+  "toY": 500,
+  "speed": 700,
+  "hold": true,
+  "button": "left"
+}
+```
+
+`move` and `drag` also accept `speed`/`pixelsPerSecond`. `drag` also accepts `fromX`/`fromY` or `startX`/`startY`. `scroll` accepts `clicks`, plus aliases `amount`, `delta`, or `dy`, and can be split with `steps` and `interval`.
+
 All commands return JSON:
 
 ```json
@@ -250,18 +269,29 @@ The mode is immutable until the launcher is stopped and restarted. The launcher
 keeps the local server and OpenAI Secure MCP Tunnel alive and stops both when you
 press Ctrl+C.
 
-Configuration files:
+Configuration files and local state:
 
 - `.env.local` contains the generated
   `COMPUTER_USE_MCP_OAUTH_OWNER_TOKEN` and is ignored by Git.
 - `ops/windows/tunnel.env` contains the dedicated tunnel ID and exact hosted MCP
   resource URL and is ignored by Git.
+- OAuth client/token state is stored in a stable local app-data directory by
+  default: `%LOCALAPPDATA%\computer-use-cli\oauth-state`. You can override it
+  with `COMPUTER_USE_MCP_STATE_DIR` in `.env.local`.
 - The shared OpenAI tunnel runtime key remains in the existing private
   `.env.local` used by the other local MCP launchers.
 
 After creating the ChatGPT custom app, open its Action control and set `act` to
 always require confirmation. If the tool schema changes, use Refresh in ChatGPT
 before testing.
+
+If ChatGPT reports that the tunnel MCP server "does not implement OAuth", check
+`ops/windows/logs/server.stdout.log`. When it contains `/authorize ... 400 Bad
+Request` and the launcher/check output says `OAuthRegisteredClients = 0`, ChatGPT
+is likely reusing a stale OAuth `client_id` after the local OAuth registry was
+lost. Restart the launcher once, then delete/recreate the draft custom app in
+ChatGPT so it performs dynamic registration again. The new stable state directory
+prevents that registration from being lost on later restarts.
 
 Security notes:
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from mcp.types import CallToolResult
 
+from computer_use_cli import policy as safety_policy
 from computer_use_cli.mcp_server import (
     ComputerUseService,
     ServerConfig,
@@ -37,6 +38,45 @@ def test_observe_only_blocks_mutation(tmp_path: Path) -> None:
     service = ComputerUseService(config(tmp_path, "observe-only"))
     with pytest.raises(Exception, match="blocked"):
         service.act({"type": "move", "x": 1, "y": 1})
+
+
+def test_move_between_is_supported_without_running_in_dry_run(tmp_path: Path) -> None:
+    service = ComputerUseService(config(tmp_path, "guarded"))
+    result = service.act(
+        {
+            "type": "moveBetween",
+            "fromX": 10,
+            "fromY": 20,
+            "toX": 30,
+            "toY": 40,
+            "speed": 500,
+            "hold": True,
+        },
+        dry_run=True,
+    )
+    assert result.structuredContent is not None
+    assert result.structuredContent["actionType"] == "moveBetween"
+    assert result.structuredContent["result"]["wouldRun"]["hold"] is True
+
+
+def test_move_between_policy_checks_start_and_end_regions() -> None:
+    policy = safety_policy.SafetyPolicy(allowed_regions=[(0, 0, 100, 100)])
+    safety_policy.validate_action(
+        policy,
+        {"type": "moveBetween", "fromX": 10, "fromY": 20, "toX": 30, "toY": 40},
+    )
+    with pytest.raises(PermissionError, match="outside allowedRegions"):
+        safety_policy.validate_action(
+            policy,
+            {"type": "moveBetween", "fromX": 10, "fromY": 20, "toX": 300, "toY": 40},
+        )
+
+
+def test_scroll_amount_alias_is_policy_checked() -> None:
+    policy = safety_policy.preset_policy("guarded")
+    safety_policy.validate_action(policy, {"type": "scroll", "amount": -10})
+    with pytest.raises(PermissionError, match="scroll amount"):
+        safety_policy.validate_action(policy, {"type": "scroll", "amount": -11})
 
 
 def test_mode_is_immutable_and_returned(tmp_path: Path) -> None:
