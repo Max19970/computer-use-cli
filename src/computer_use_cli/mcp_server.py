@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
+from mcp.server.auth.routes import build_metadata
 from mcp.server.auth.settings import (
     AuthSettings,
     ClientRegistrationOptions,
@@ -305,6 +306,22 @@ def create_server(config: ServerConfig) -> tuple[FastMCP, ComputerUseService]:
                 "mode": config.mode,
             }
         )
+
+    @server.custom_route(
+        "/.well-known/oauth-authorization-server/",
+        methods=["GET", "OPTIONS"],
+        include_in_schema=False,
+    )
+    async def oauth_metadata_with_trailing_slash(_request: Request) -> Response:
+        """Avoid a redirect that Secure MCP Tunnel intentionally blocks."""
+        metadata = build_metadata(
+            auth_settings.issuer_url,
+            auth_settings.service_documentation_url,
+            auth_settings.client_registration_options
+            or ClientRegistrationOptions(),
+            auth_settings.revocation_options or RevocationOptions(),
+        )
+        return JSONResponse(metadata.model_dump(mode="json", exclude_none=True))
 
     @server.custom_route(
         "/oauth/approve",

@@ -67,6 +67,14 @@ def test_oauth_and_streamable_http_tools(tmp_path: Path) -> None:
         else:
             raise AssertionError("test MCP server did not start")
 
+        oauth_metadata = httpx.get(
+            f"{local_base}/.well-known/oauth-authorization-server/",
+            follow_redirects=False,
+        )
+        assert oauth_metadata.status_code == 200
+        assert oauth_metadata.history == []
+        assert oauth_metadata.json()["issuer"] == f"{local_base}/"
+
         redirect_uri = "http://127.0.0.1:9999/callback"
         registered = httpx.post(
             f"{local_base}/register",
