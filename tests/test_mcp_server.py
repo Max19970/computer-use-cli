@@ -74,9 +74,9 @@ def test_move_between_policy_checks_start_and_end_regions() -> None:
 
 def test_scroll_amount_alias_is_policy_checked() -> None:
     policy = safety_policy.preset_policy("guarded")
-    safety_policy.validate_action(policy, {"type": "scroll", "amount": -10})
+    safety_policy.validate_action(policy, {"type": "scroll", "amount": -300})
     with pytest.raises(PermissionError, match="scroll amount"):
-        safety_policy.validate_action(policy, {"type": "scroll", "amount": -11})
+        safety_policy.validate_action(policy, {"type": "scroll", "amount": -301})
 
 
 def test_scroll_steps_is_not_rejected_as_batch(tmp_path: Path) -> None:
