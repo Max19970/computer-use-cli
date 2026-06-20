@@ -64,7 +64,7 @@ class SafetyPolicy:
     denied_window_title_substrings: list[str] = field(default_factory=list)
     allowed_regions: list[tuple[int, int, int, int]] = field(default_factory=list)
     max_clicks: int = 3
-    max_scroll_abs: int = 20
+    max_scroll_abs: int = 600
     max_type_length: int = 500
     max_sleep_seconds: float = 10.0
     allow_text_input: bool = True
@@ -146,7 +146,7 @@ def preset_policy(name: str) -> SafetyPolicy:
             denied_window_title_substrings=list(SENSITIVE_WINDOW_SUBSTRINGS),
             require_dry_run_actions={"uiaClick"},
             max_clicks=2,
-            max_scroll_abs=10,
+            max_scroll_abs=300,
             max_type_length=240,
             max_sleep_seconds=5.0,
         )
