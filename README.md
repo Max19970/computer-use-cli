@@ -1,62 +1,90 @@
 # computer-use-cli
 
-Small local Windows-oriented CLI for computer use:
+Local Windows-oriented computer-use toolkit for screenshots, desktop state observation, mouse/keyboard automation, UI Automation, vision helpers, safety policies, and a private ChatGPT MCP bridge.
 
-- agent-level `observe` snapshots and structured `act` JSON actions;
-- safety policy presets, JSON policy files, allowlists, denylists, and limits;
-- screen screenshots with PyAutoGUI, MSS, or FFmpeg;
-- monitor discovery;
-- window list, focus, active window, and window screenshots;
-- mouse position, move, click, double-click, right-click, drag, smooth move-between/hold, scroll;
-- keyboard text, key press, hotkey;
-- UI Automation tree/search/click through pywinauto;
-- template image matching and wait-image loops through OpenCV;
-- optional OCR through pytesseract/Tesseract;
-- JSONL action logging.
+The package is JSON-first: commands return machine-readable JSON, and the agent flow is meant to be `observe -> decide -> act -> observe again` rather than blind multi-step automation.
 
-The CLI is JSON-first so an LLM/agent can call it in a loop:
+## What it can do
 
-1. `cu observe`;
-2. inspect the screenshot and state JSON;
-3. `cu act action.json --policy-preset guarded`;
-4. observe again and verify.
+- Capture screenshots with `mss`, PyAutoGUI, or FFmpeg.
+- Produce agent-ready desktop observations with screenshot, cursor, screen, window, and optional UI Automation state.
+- Execute one structured JSON action through `cu act`.
+- Run mouse actions: position, move, smooth move-between, click, double-click, right-click, drag, and split scroll.
+- Run keyboard actions: type text, press a key, and hotkey chords.
+- Inspect and interact with windows: list, active window, focus, and screenshot by title.
+- Inspect and interact with UI Automation trees through pywinauto: tree, find, and click.
+- Use OpenCV template matching and wait loops.
+- Run OCR through pytesseract/Tesseract when native Tesseract is installed.
+- Apply safety policies with presets, JSON files, action allowlists/denylists, window-title filters, coordinate regions, and action limits.
+- Expose the desktop to ChatGPT as a private OAuth-protected MCP app with exactly two tools: `observe` and `act`.
+
+## Requirements
+
+- Windows.
+- Python 3.11+.
+- A normal logged-in, unlocked desktop session for real mouse/keyboard automation.
+- Optional: FFmpeg in `PATH` for the FFmpeg screenshot backend.
+- Optional: native Tesseract OCR in `PATH` for OCR.
+- Optional for ChatGPT MCP: a configured OpenAI Secure MCP Tunnel client and tunnel environment file.
 
 ## Install
 
+From the repository root:
+
 ```powershell
-cd C:\Users\maxsh\Documents\Codex\computer-use-cli
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -U pip
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-Then use:
+Run the CLI directly from the virtual environment:
 
 ```powershell
 .\.venv\Scripts\cu.exe --help
 ```
 
-or add `.venv\Scripts` to PATH for the current shell:
+Or add the venv scripts directory to the current shell session:
 
 ```powershell
 $env:Path = "$PWD\.venv\Scripts;$env:Path"
 cu --help
 ```
 
-## Examples
+For development and tests:
 
-### Agent loop
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\ruff.exe check .
+```
+
+## Core workflow
 
 ```powershell
 cu observe --screenshot dev-only/generated/tmp/observe.png --json dev-only/generated/tmp/state.json --include-uia --uia-depth 1
 cu actions
 cu policy --preset guarded
-cu act action.json --policy-preset guarded
-cu act action.json --policy policies/guarded.example.json
 cu act action.json --dry-run --policy-preset guarded
+cu act action.json --policy-preset guarded
 ```
 
-Example action file:
+The intended safe loop is:
+
+1. call `cu observe`;
+2. inspect the screenshot and structured state;
+3. call `cu act` with one JSON action;
+4. call `cu observe` again and verify the result before deciding on another action.
+
+## JSON actions
+
+`cu act` accepts a single JSON object from a file, or `-` for stdin:
+
+```powershell
+cu act action.json --policy-preset guarded
+Get-Content action.json | cu act - --dry-run --policy-preset guarded
+```
+
+Minimal click action:
 
 ```json
 {
@@ -66,28 +94,39 @@ Example action file:
 }
 ```
 
-Safe dry-run UIA action:
+Safe UI Automation dry-run action:
 
 ```json
 {
   "type": "uiaClick",
   "controlType": "Button",
-  "name": "Refresh",
-  "dryRun": true
+  "name": "Refresh"
 }
 ```
 
 Supported action types:
 
 ```text
-position, move, moveBetween, click, doubleClick, rightClick, drag, scroll, type, press, hotkey,
-sleep, screenshot, screenshotWindow, focusWindow, matchImage, waitImage, ocr,
-uiaTree, uiaFind, uiaClick, observe
+click, doubleClick, drag, focusWindow, hotkey, matchImage, move, moveBetween,
+observe, ocr, position, press, rightClick, screenshot, screenshotWindow, scroll,
+sleep, type, uiaClick, uiaFind, uiaTree, waitImage
 ```
 
-### Safety policies
+Useful aliases and action options:
 
-By default, `cu act` uses the permissive preset to preserve direct CLI behavior. For agent usage, prefer `guarded` or a custom policy file.
+- `move` accepts `speed` or `pixelsPerSecond`.
+- `moveBetween` accepts `fromX`/`fromY` or `startX`/`startY`, plus `toX`/`toY`, `endX`/`endY`, or `x`/`y` for the destination.
+- `moveBetween` can hold a mouse button during movement with `hold: true` and `button`.
+- `drag` accepts `fromX`/`fromY` or `startX`/`startY`, plus `speed` or `pixelsPerSecond`.
+- `scroll` accepts `clicks`, `amount`, `delta`, or `dy`.
+- `scroll` can be split with `steps`, `scrollSteps`, or `wheelSteps` and delayed with `interval`, `scrollInterval`, or `wheelInterval`.
+- `hotkey` accepts a list of keys or a string such as `ctrl+l`.
+
+MCP and `cu act` deliberately execute one action at a time. Batches, sequences, and list-valued `steps` are rejected by the MCP layer.
+
+## Safety policies
+
+By default, direct `cu act` uses the permissive preset to preserve normal CLI behavior. For agent usage, prefer `guarded` or a custom JSON policy.
 
 ```powershell
 cu policy --preset permissive
@@ -99,18 +138,20 @@ cu policy --policy policies/guarded.example.json
 Policy presets:
 
 ```text
-permissive   Allows existing direct behavior.
-guarded      Blocks common sensitive window titles, limits click/scroll/type/sleep, and requires dry-run for uiaClick.
-observe-only Allows read-only/vision actions and blocks mutating mouse/keyboard/window actions.
+permissive    Allows direct behavior.
+guarded       Blocks common sensitive window titles, limits click/scroll/type/sleep,
+              and requires dry-run for uiaClick.
+observe-only  Allows read-only/vision actions and blocks mutating desktop actions.
 ```
 
-Custom policy example:
+Policy JSON files can extend a preset:
 
 ```json
 {
   "name": "my-agent-policy",
   "base": "guarded",
   "allowedActions": ["observe", "position", "screenshot", "uiaTree", "uiaFind", "click", "move"],
+  "deniedActions": [],
   "deniedWindowTitleSubstrings": ["password", "bank", "настройки", "парол"],
   "allowedWindowTitleSubstrings": ["Chrome", "Codex", "проводник"],
   "allowedRegions": [[0, 0, 2560, 1440]],
@@ -126,18 +167,20 @@ Custom policy example:
 }
 ```
 
-You can also set a policy globally for a shell session:
+A policy can also be selected for the current shell session:
 
 ```powershell
 $env:COMPUTER_USE_POLICY = "guarded"
-# or:
-$env:COMPUTER_USE_POLICY = "C:\Users\maxsh\Documents\Codex\computer-use-cli\policies\guarded.example.json"
+$env:COMPUTER_USE_POLICY = "$PWD\policies\guarded.example.json"
 ```
 
-### Screen capture
+`--policy` overrides `--policy-preset`. `COMPUTER_USE_POLICY` is used when no explicit policy file is passed.
+
+## Screen capture and observation
 
 ```powershell
 cu screenshot --output screen.png
+cu screenshot --backend mss --output screen.png
 cu screenshot --backend pyautogui --output screen.png
 cu screenshot --backend ffmpeg --output screen.png
 cu screenshot --output region.png --x 100 --y 100 --width 1280 --height 720
@@ -145,9 +188,17 @@ cu monitors
 cu screen-size --backend mss --monitor 0
 ```
 
-`mss` is the default screenshot backend. Monitor `0` is the full virtual desktop.
+`mss` is the default screenshot backend. Monitor `0` means the full virtual desktop for MSS commands.
 
-### Windows
+Observation example:
+
+```powershell
+cu observe --screenshot observe.png --json observe.json
+cu observe --screenshot observe.png --json observe.json --include-uia --uia-depth 2 --uia-title "Chrome"
+cu observe --no-screenshot --include-windows
+```
+
+## Windows
 
 ```powershell
 cu windows list
@@ -157,7 +208,7 @@ cu windows screenshot "Chrome" --output chrome.png
 cu screenshot-window "Chrome" --output chrome.png
 ```
 
-### Mouse and keyboard
+## Mouse and keyboard
 
 ```powershell
 cu position
@@ -174,7 +225,13 @@ cu press enter
 cu hotkey ctrl l
 ```
 
-### UI Automation
+All mutating desktop actions return JSON. Errors also return JSON and exit with code `1`:
+
+```json
+{"ok": false, "action": "hotkey", "error": "hotkey requires at least two keys", "type": "ValueError"}
+```
+
+## UI Automation
 
 ```powershell
 cu --pretty uia tree --depth 2
@@ -184,175 +241,193 @@ cu uia click --title "Chrome" --name "Refresh" --dry-run
 cu uia click --title "Chrome" --automation-id "SomeAutomationId"
 ```
 
-`--dry-run` is useful for agent planning because it returns the matched control without clicking.
+`--dry-run` returns the matched control without clicking it, which is useful for agent planning and policy checks. UI Automation coverage depends heavily on the target application.
 
-### Image matching
+## Image matching and OCR
 
 ```powershell
 cu crop screen.png --output template.png --x 100 --y 100 --width 80 --height 40
 cu match-image --image screen.png --template template.png --threshold 0.85
 cu wait-image --template template.png --output wait-screen.png --timeout 10 --interval 0.5
-```
-
-### OCR
-
-```powershell
 cu ocr screen.png --language eng
 ```
 
-OCR uses `pytesseract`, but it still requires the native Tesseract OCR executable to be installed and available in PATH. If it is missing, the command returns a JSON error instead of pretending OCR worked.
+OCR uses the `pytesseract` Python package, but still requires the native Tesseract executable. If Tesseract is missing, the command returns a JSON error instead of pretending OCR worked.
 
-### Logging
+## Logging
+
+Log JSON output for auditing/debugging:
 
 ```powershell
 cu --log dev-only/generated/tmp/actions.jsonl screenshot --output screen.png
 cu --log dev-only/generated/tmp/actions.jsonl position
 ```
 
-or with an environment variable:
+Or set a default log path for the current shell:
 
 ```powershell
 $env:COMPUTER_USE_LOG = "dev-only/generated/tmp/actions.jsonl"
 cu position
 ```
 
-For MCP/`cu act`, smooth cursor movement can be sent as one confirmed action:
-
-```json
-{
-  "type": "moveBetween",
-  "fromX": 100,
-  "fromY": 100,
-  "toX": 800,
-  "toY": 500,
-  "speed": 700,
-  "hold": true,
-  "button": "left"
-}
-```
-
-`move` and `drag` also accept `speed`/`pixelsPerSecond`. `drag` also accepts `fromX`/`fromY` or `startX`/`startY`. `scroll` accepts `clicks`, plus aliases `amount`, `delta`, or `dy`, and can be split with `steps`/`scrollSteps`/`wheelSteps` and `interval`/`scrollInterval`/`wheelInterval`.
-
-All commands return JSON:
-
-```json
-{"ok": true, "action": "position", "x": 100, "y": 200}
-```
-
 ## ChatGPT MCP
 
-The package includes a private, OAuth-protected MCP server for ChatGPT with exactly
-two tools:
+The package includes a private OAuth-protected MCP server for ChatGPT named `Computer Use MCP`.
 
-- `observe` returns the primary-monitor screenshot directly to ChatGPT together
-  with structured cursor, window, screen, and optional UI Automation state.
-- `act` executes exactly one structured action and is marked as destructive so it
-  can be configured to always require confirmation in ChatGPT.
+It exposes exactly two tools:
 
-Install the MCP and test dependencies:
+- `observe` returns a primary-monitor screenshot directly to ChatGPT, plus structured cursor, screen, window, and optional UI Automation state.
+- `act` executes exactly one structured action. It is annotated as destructive, and should be configured in ChatGPT to always require confirmation.
+
+The MCP server has three immutable startup modes:
+
+```text
+observe-only  Read-only/vision actions only; blocks mutating desktop actions.
+guarded       Recommended mode; guarded policy with sensitive-title blocks and action limits.
+permissive    Unrestricted local desktop control; requires explicit launcher confirmation.
+```
+
+Changing mode requires stopping and restarting the launcher.
+
+### MCP install
+
+Install with test dependencies:
 
 ```powershell
-cd C:\Users\maxsh\Documents\Codex\computer-use-cli
 .\.venv\Scripts\python.exe -m pip install -e ".[test]"
 ```
 
-The Windows launcher is installed from `ops/windows`. It shows an interactive mode
-menu each time it starts:
-
-```text
-observe-only
-guarded
-permissive
-```
-
-The mode is immutable until the launcher is stopped and restarted. The launcher
-keeps the local server and OpenAI Secure MCP Tunnel alive and stops both when you
-press Ctrl+C.
-
-Configuration files and local state:
-
-- `.env.local` contains the generated
-  `COMPUTER_USE_MCP_OAUTH_OWNER_TOKEN` and is ignored by Git.
-- `ops/windows/tunnel.env` contains the dedicated tunnel ID and exact hosted MCP
-  resource URL and is ignored by Git.
-- OAuth client/token state is stored in a stable local app-data directory by
-  default: `%LOCALAPPDATA%\computer-use-cli\oauth-state`. You can override it
-  with `COMPUTER_USE_MCP_STATE_DIR` in `.env.local`.
-- The shared OpenAI tunnel runtime key remains in the existing private
-  `.env.local` used by the other local MCP launchers.
-
-After creating the ChatGPT custom app, open its Action control and set `act` to
-always require confirmation. If the tool schema changes, use Refresh in ChatGPT
-before testing.
-
-If ChatGPT reports that the tunnel MCP server "does not implement OAuth", check
-`ops/windows/logs/server.stdout.log`. When it contains `/authorize ... 400 Bad
-Request` and the launcher/check output says `OAuthRegisteredClients = 0`, ChatGPT
-is likely reusing a stale OAuth `client_id` after the local OAuth registry was
-lost. Restart the launcher once, then delete/recreate the draft custom app in
-ChatGPT so it performs dynamic registration again. The new stable state directory
-prevents that registration from being lost on later restarts.
-
-Security notes:
-
-- Keep Windows logged in and unlocked while using the MCP.
-- Close or hide sensitive content before calling `observe`.
-- `guarded` is the recommended mode.
-- PyAutoGUI's upper-left-corner fail-safe remains enabled.
-- The MCP never exposes a generic shell or arbitrary CLI command runner.
-
-Errors also return JSON and exit with code 1:
-
-```json
-{"ok": false, "action": "hotkey", "error": "hotkey requires at least two keys", "type": "ValueError"}
-```
-
-## Safety
-
-PyAutoGUI fail-safe is enabled: move the mouse cursor to a screen corner to abort uncontrolled automation.
-
-For agent usage, prefer:
+Create `ops/windows/tunnel.env` from the example and fill it with the dedicated tunnel values:
 
 ```powershell
-cu act action.json --dry-run --policy-preset guarded
-cu act action.json --policy-preset guarded
+Copy-Item ops\windows\tunnel.env.example ops\windows\tunnel.env
+notepad ops\windows\tunnel.env
 ```
 
-before using permissive direct execution.
+Expected fields:
+
+```text
+COMPUTER_USE_MCP_TUNNEL_ID=tunnel_REPLACE_ME
+COMPUTER_USE_MCP_OAUTH_RESOURCE_URL=https://.../v1/mcp/tunnel_REPLACE_ME
+```
+
+The launcher auto-creates `.env.local` with `COMPUTER_USE_MCP_OAUTH_OWNER_TOKEN` on first start. Both `.env.local` and `ops/windows/tunnel.env` are ignored by Git.
+
+### MCP launcher
+
+Start from PowerShell:
+
+```powershell
+.\ops\windows\start-computer-use-mcp.ps1
+```
+
+The launcher:
+
+1. lets you choose `observe-only`, `guarded`, or `permissive`;
+2. starts the local MCP server on loopback;
+3. starts the dedicated Secure MCP Tunnel client;
+4. writes process/runtime files under `ops/windows/runtime`;
+5. writes logs under `ops/windows/logs`;
+6. keeps both processes alive until Ctrl+C.
+
+Useful helpers:
+
+```powershell
+.\ops\windows\check-computer-use-mcp.ps1
+.\ops\windows\copy-oauth-password.ps1
+.\ops\windows\stop-computer-use-mcp.ps1
+```
+
+OAuth client/token state persists by default under:
+
+```text
+%LOCALAPPDATA%\computer-use-cli\oauth-state
+```
+
+Override it with `COMPUTER_USE_MCP_STATE_DIR` in `.env.local` if needed.
+
+### ChatGPT setup notes
+
+- Use the hosted MCP resource URL from `ops/windows/tunnel.env` when creating the ChatGPT custom app.
+- During authorization, use the owner password generated in `.env.local`; `copy-oauth-password.ps1` copies it to the clipboard.
+- Set the `act` action control to always require confirmation.
+- Refresh the app/tool schema in ChatGPT after changing MCP tool metadata.
+- Keep Windows logged in and unlocked while using the MCP.
+- Close or hide sensitive windows before calling `observe`; screenshots expose visible screen contents.
+
+### MCP troubleshooting
+
+If ChatGPT reports that the tunnel MCP server “does not implement OAuth”:
+
+1. check `ops/windows/logs/server.stdout.log`;
+2. run `ops/windows/check-computer-use-mcp.ps1`;
+3. if `OAuthRegisteredClients = 0` and the logs show `/authorize ... 400 Bad Request`, ChatGPT is probably reusing a stale OAuth `client_id` after local OAuth state was lost;
+4. restart the launcher once, then delete/recreate the draft custom app in ChatGPT so it performs dynamic registration again.
+
+If the check script reports `unsupported_country_region_territory`, the current tunnel network route was rejected upstream. Restart the tunnel/launcher from an allowed route.
+
+## Direct MCP server entry point
+
+The package also installs `cu-mcp`:
+
+```powershell
+cu-mcp --mode guarded
+```
+
+For normal ChatGPT use, prefer the Windows launcher because it loads local env files, starts the tunnel, manages PIDs/logs, and keeps the selected mode immutable for the server process.
+
+## Security model
+
+This project is a local automation tool, not a sandbox.
+
+- PyAutoGUI fail-safe remains enabled: move the mouse cursor to a screen corner to abort uncontrolled automation.
+- Policies are guardrails for agent usage, not a security boundary against malicious local code.
+- `observe` can reveal anything visible on the desktop.
+- The MCP server exposes no generic shell or arbitrary command runner.
+- The MCP `act` tool rejects batches and should be set to always require confirmation in ChatGPT.
+- Prefer `guarded` for real use and `observe-only` for inspection-only sessions.
 
 ## Limitations
 
-- UI Automation availability depends on the target application. Some apps expose a rich tree, some expose almost nothing useful.
-- OCR requires native Tesseract OCR, not only the Python package.
+- Windows-first project; other operating systems are not the target.
+- UI Automation support depends on the target application.
+- OCR requires native Tesseract, not only the Python package.
 - Template matching is pixel-based and can be sensitive to scaling, theme, animation, and DPI differences.
-- FFmpeg capture requires `ffmpeg` in PATH and Windows `gdigrab` support.
-- Policy checks are guardrails, not a security boundary against malicious local code.
-- `act --dry-run` does not execute mutating mouse/keyboard/window actions; some read-only actions still run because they are safe.
+- FFmpeg capture requires `ffmpeg` in `PATH` and Windows `gdigrab` support.
+- `act --dry-run` does not execute mutating mouse/keyboard/window actions; read-only actions may still run because they are safe.
+- The MCP observes the primary monitor by default.
+
+## Repository layout
+
+```text
+src/computer_use_cli/        Python package and CLI/MCP implementation
+ops/windows/                 Windows MCP launcher, checker, stopper, and tunnel env example
+policies/                    Example safety policies
+docs/superpowers/specs/      Design notes/specs
+tests/                       MCP, OAuth, policy, and integration tests
+```
 
 ## Roadmap
 
-### Stage 1: MVP
+### Done
 
-- [x] Screenshot
-- [x] Mouse actions
-- [x] Keyboard actions
-- [x] Basic window list/focus
-- [x] JSON output
+- [x] Screenshot capture.
+- [x] Mouse and keyboard actions.
+- [x] Window list/focus/screenshot helpers.
+- [x] JSON output and JSONL logs.
+- [x] MSS/FFmpeg backend switch.
+- [x] UI Automation tree/find/click.
+- [x] Image matching, wait-image, crop, and OCR wrapper.
+- [x] Agent-level `cu observe` and `cu act`.
+- [x] Structured action schema.
+- [x] Safety policy presets and JSON policy files.
+- [x] Smooth move-between/hold and scroll step aliases.
+- [x] Private OAuth-protected ChatGPT MCP wrapper.
+- [x] Windows launcher/check/stop helpers for the MCP and tunnel.
 
-### Stage 2: good level
+### Possible next steps
 
-- [x] MSS/FFmpeg screenshot backend switch
-- [x] Window screenshot by title
-- [x] pywinauto UIA tree
-- [x] Click control by name/automation id
-- [x] Image matching / wait-image
-- [x] OCR integration wrapper
-- [x] Action logs
-
-### Stage 3: agent-level observe/act
-
-- [x] `cu observe --screenshot screen.png`
-- [x] `cu act action.json`
-- [x] Structured action schema
-- [x] Safety policies / allowlists
-- [ ] MCP wrapper
+- [ ] More structured action schema docs/examples.
+- [ ] Richer UIA targeting helpers.
+- [ ] Better cross-DPI/template-matching guidance.
+- [ ] Optional cleanup command for old MCP runtime screenshots/logs.
