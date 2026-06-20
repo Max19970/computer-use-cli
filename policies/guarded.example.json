@@ -1,0 +1,27 @@
+{
+  "name": "guarded-example",
+  "base": "guarded",
+  "deniedWindowTitleSubstrings": [
+    "1password",
+    "bank",
+    "bitwarden",
+    "keepass",
+    "password",
+    "paypal",
+    "settings",
+    "вход",
+    "настройки",
+    "парол",
+    "сбер",
+    "тинькофф"
+  ],
+  "requireDryRunActions": ["uiaClick"],
+  "maxClicks": 2,
+  "maxScrollAbs": 10,
+  "maxTypeLength": 240,
+  "maxSleepSeconds": 5,
+  "allowTextInput": true,
+  "allowKeyboard": true,
+  "allowMouse": true,
+  "allowWindowFocus": true
+}

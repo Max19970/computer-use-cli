@@ -1,0 +1,19 @@
+{
+  "name": "observe-only-example",
+  "base": "observe-only",
+  "allowedActions": [
+    "matchImage",
+    "observe",
+    "ocr",
+    "position",
+    "screenshot",
+    "screenshotWindow",
+    "uiaFind",
+    "uiaTree",
+    "waitImage"
+  ],
+  "allowTextInput": false,
+  "allowKeyboard": false,
+  "allowMouse": false,
+  "allowWindowFocus": false
+}
