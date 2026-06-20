@@ -4,3 +4,9 @@ __pycache__/
 *.egg-info/
 .DS_Store
 dev-only/generated/tmp/
+.env.local
+ops/windows/tunnel.env
+ops/windows/runtime/
+ops/windows/logs/
+.pytest_cache/
+.ruff_cache/

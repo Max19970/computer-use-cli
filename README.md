@@ -220,6 +220,57 @@ All commands return JSON:
 {"ok": true, "action": "position", "x": 100, "y": 200}
 ```
 
+## ChatGPT MCP
+
+The package includes a private, OAuth-protected MCP server for ChatGPT with exactly
+two tools:
+
+- `observe` returns the primary-monitor screenshot directly to ChatGPT together
+  with structured cursor, window, screen, and optional UI Automation state.
+- `act` executes exactly one structured action and is marked as destructive so it
+  can be configured to always require confirmation in ChatGPT.
+
+Install the MCP and test dependencies:
+
+```powershell
+cd C:\Users\maxsh\Documents\Codex\computer-use-cli
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+```
+
+The Windows launcher is installed from `ops/windows`. It shows an interactive mode
+menu each time it starts:
+
+```text
+observe-only
+guarded
+permissive
+```
+
+The mode is immutable until the launcher is stopped and restarted. The launcher
+keeps the local server and OpenAI Secure MCP Tunnel alive and stops both when you
+press Ctrl+C.
+
+Configuration files:
+
+- `.env.local` contains the generated
+  `COMPUTER_USE_MCP_OAUTH_OWNER_TOKEN` and is ignored by Git.
+- `ops/windows/tunnel.env` contains the dedicated tunnel ID and exact hosted MCP
+  resource URL and is ignored by Git.
+- The shared OpenAI tunnel runtime key remains in the existing private
+  `.env.local` used by the other local MCP launchers.
+
+After creating the ChatGPT custom app, open its Action control and set `act` to
+always require confirmation. If the tool schema changes, use Refresh in ChatGPT
+before testing.
+
+Security notes:
+
+- Keep Windows logged in and unlocked while using the MCP.
+- Close or hide sensitive content before calling `observe`.
+- `guarded` is the recommended mode.
+- PyAutoGUI's upper-left-corner fail-safe remains enabled.
+- The MCP never exposes a generic shell or arbitrary CLI command runner.
+
 Errors also return JSON and exit with code 1:
 
 ```json

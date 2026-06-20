@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "computer-use-cli"
-version = "0.4.0"
+version = "0.5.0"
 description = "Small local CLI for screenshot, mouse, keyboard, window, UIA, and vision control on Windows."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,11 +18,20 @@ dependencies = [
   "mss>=10.1.0",
   "pywinauto>=0.6.9",
   "opencv-python>=4.12.0.88",
-  "pytesseract>=0.3.13"
+  "pytesseract>=0.3.13",
+  "mcp>=1.27,<2"
 ]
 
 [project.scripts]
 cu = "computer_use_cli.cli:app"
+cu-mcp = "computer_use_cli.mcp_server:main"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "ruff>=0.14,<1"
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/computer_use_cli"]
