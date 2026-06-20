@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $runtimeDir = Join-Path $PSScriptRoot "runtime"
-foreach ($name in @("tunnel-client.pid", "server.pid")) {
+foreach ($name in @("tunnel-client.pid", "server.pid", "server-launcher.pid")) {
   $pidFile = Join-Path $runtimeDir $name
   if (-not (Test-Path -LiteralPath $pidFile)) {
     continue

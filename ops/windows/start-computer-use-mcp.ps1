@@ -10,6 +10,7 @@ $runtimeDir = Join-Path $PSScriptRoot "runtime"
 $logDir = Join-Path $PSScriptRoot "logs"
 $profilePath = Join-Path $runtimeDir "computer-use-mcp.yaml"
 $serverPidFile = Join-Path $runtimeDir "server.pid"
+$serverLauncherPidFile = Join-Path $runtimeDir "server-launcher.pid"
 $tunnelPidFile = Join-Path $runtimeDir "tunnel-client.pid"
 
 function Import-EnvFile {
@@ -189,6 +190,7 @@ if ($createdOwnerToken) {
 
 Stop-SavedProcess -PidFile $tunnelPidFile
 Stop-SavedProcess -PidFile $serverPidFile
+Stop-SavedProcess -PidFile $serverLauncherPidFile
 
 @"
 config_version: 1
@@ -218,8 +220,14 @@ try {
     -RedirectStandardOutput (Join-Path $logDir "server.stdout.log") `
     -RedirectStandardError (Join-Path $logDir "server.stderr.log") `
     -PassThru
-  Set-Content -LiteralPath $serverPidFile -Value $serverProcess.Id
+  Set-Content -LiteralPath $serverLauncherPidFile -Value $serverProcess.Id
   Wait-Endpoint -Uri "http://127.0.0.1:7678/healthz" -Name "Computer Use MCP"
+  $serverOwnerPid = Get-NetTCPConnection `
+    -LocalPort 7678 `
+    -State Listen `
+    -ErrorAction Stop |
+    Select-Object -First 1 -ExpandProperty OwningProcess
+  Set-Content -LiteralPath $serverPidFile -Value $serverOwnerPid
 
   $tunnelProcess = Start-Process `
     -FilePath $tunnelClient `
@@ -249,5 +257,6 @@ try {
 } finally {
   Stop-SavedProcess -PidFile $tunnelPidFile
   Stop-SavedProcess -PidFile $serverPidFile
+  Stop-SavedProcess -PidFile $serverLauncherPidFile
   Write-Host "Computer Use MCP stopped." -ForegroundColor Yellow
 }
