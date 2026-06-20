@@ -214,7 +214,7 @@ def run_action(
             _scroll_clicks(action),
             int(action["x"]) if "x" in action else None,
             int(action["y"]) if "y" in action else None,
-            _optional_int(action, "steps"),
+            _optional_int(action, "steps", "scrollSteps", "wheelSteps"),
             float(action.get("interval", 0.0)),
         )
 
