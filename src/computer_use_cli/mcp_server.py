@@ -151,7 +151,9 @@ class ComputerUseService:
     def act(self, action: dict[str, Any], *, dry_run: bool = False) -> CallToolResult:
         if not isinstance(action, dict):
             raise ToolError("act accepts exactly one JSON action object")
-        if any(key in action for key in ("actions", "sequence", "steps")):
+        if "actions" in action or "sequence" in action:
+            raise ToolError("action batches and sequences are not supported")
+        if isinstance(action.get("steps"), list):
             raise ToolError("action batches and sequences are not supported")
         kind = action.get("type") or action.get("action")
         if not isinstance(kind, str) or kind not in actions.supported_actions():

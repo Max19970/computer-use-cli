@@ -79,6 +79,17 @@ def test_scroll_amount_alias_is_policy_checked() -> None:
         safety_policy.validate_action(policy, {"type": "scroll", "amount": -11})
 
 
+def test_scroll_steps_is_not_rejected_as_batch(tmp_path: Path) -> None:
+    service = ComputerUseService(config(tmp_path, "guarded"))
+    result = service.act(
+        {"type": "scroll", "amount": 3, "steps": 3, "interval": 0.05},
+        dry_run=True,
+    )
+    assert result.structuredContent is not None
+    assert result.structuredContent["actionType"] == "scroll"
+    assert result.structuredContent["result"]["wouldRun"]["steps"] == 3
+
+
 def test_mode_is_immutable_and_returned(tmp_path: Path) -> None:
     service = ComputerUseService(config(tmp_path, "guarded"))
     result = service.act({"type": "position"})
