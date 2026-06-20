@@ -231,7 +231,7 @@ For MCP/`cu act`, smooth cursor movement can be sent as one confirmed action:
 }
 ```
 
-`move` and `drag` also accept `speed`/`pixelsPerSecond`. `drag` also accepts `fromX`/`fromY` or `startX`/`startY`. `scroll` accepts `clicks`, plus aliases `amount`, `delta`, or `dy`, and can be split with `steps`/`scrollSteps`/`wheelSteps` and `interval`.
+`move` and `drag` also accept `speed`/`pixelsPerSecond`. `drag` also accepts `fromX`/`fromY` or `startX`/`startY`. `scroll` accepts `clicks`, plus aliases `amount`, `delta`, or `dy`, and can be split with `steps`/`scrollSteps`/`wheelSteps` and `interval`/`scrollInterval`/`wheelInterval`.
 
 All commands return JSON:
 

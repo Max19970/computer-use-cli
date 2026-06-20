@@ -215,7 +215,7 @@ def run_action(
             int(action["x"]) if "x" in action else None,
             int(action["y"]) if "y" in action else None,
             _optional_int(action, "steps", "scrollSteps", "wheelSteps"),
-            float(action.get("interval", 0.0)),
+            _optional_float(action, "interval", "scrollInterval", "wheelInterval") or 0.0,
         )
 
     if kind == "type":

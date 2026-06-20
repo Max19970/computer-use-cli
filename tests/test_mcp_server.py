@@ -101,6 +101,17 @@ def test_scroll_step_alias_is_supported(tmp_path: Path) -> None:
     assert result.structuredContent["result"]["wouldRun"]["scrollSteps"] == 3
 
 
+def test_scroll_interval_alias_is_supported(tmp_path: Path) -> None:
+    service = ComputerUseService(config(tmp_path, "guarded"))
+    result = service.act(
+        {"type": "scroll", "amount": 3, "scrollSteps": 3, "scrollInterval": 0.05},
+        dry_run=True,
+    )
+    assert result.structuredContent is not None
+    assert result.structuredContent["actionType"] == "scroll"
+    assert result.structuredContent["result"]["wouldRun"]["scrollInterval"] == 0.05
+
+
 def test_mode_is_immutable_and_returned(tmp_path: Path) -> None:
     service = ComputerUseService(config(tmp_path, "guarded"))
     result = service.act({"type": "position"})
